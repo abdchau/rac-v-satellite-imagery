@@ -1,0 +1,6 @@
+/data/
+*.npy
+*.h5
+src/*/__pycache__/
+*.json
+
