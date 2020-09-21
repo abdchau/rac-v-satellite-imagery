@@ -15,7 +15,7 @@ num_channels = 16
 num_mask_channels = 1
 img_rows = 96
 img_cols = 96
-cache_path = '../cache'
+cache_path = '../../cache'
 
 
 #======================================================================================================
@@ -51,7 +51,7 @@ def jaccard_coef_loss(y_true, y_pred):
 def UNetModel(shape=(512,512,1), origDepth=64):
 	inputs = keras.layers.Input(shape=shape)
 	
-	# contraction block                                                           # input shapes
+	# contraction block                                                          # input shapes
 	contract, concat1 = contraction_unit(depth=origDepth*1)(inputs)              # 512x512
 	contract, concat2 = contraction_unit(depth=origDepth*2)(contract)            # 256x256
 	contract, concat3 = contraction_unit(depth=origDepth*4)(contract)            # 128x128
@@ -113,6 +113,7 @@ def read_model(cross='', load=True):
 		model.load_weights(os.path.join(cache_path, weight_name))
 	return model
 
+# creates a single batch; designed to be called by the generator
 def form_batch(X, y, batch_size, min_true_label):
 	X_batch = np.zeros((batch_size, num_channels, img_rows, img_cols))
 	y_batch = np.zeros((batch_size, num_mask_channels, img_rows, img_cols))
@@ -128,17 +129,18 @@ def form_batch(X, y, batch_size, min_true_label):
 			y_batch[i] = y[random_image, :, random_height: random_height + img_rows, random_width: random_width + img_cols]
 			X_batch[i] = np.array(X[random_image, :, random_height: random_height + img_rows, random_width: random_width + img_cols])
 
-
+			# forces a minimum amount of true values in the random patches
 			if min_true_label is not None:
 				sum_ = np.sum(y_batch)
 				if sum_ >= min_true_label*i:
 					break
 			else:
 				break
-			# print(i, sum_, "THIS IS THE SUM RIGHT HERE NOTICE ME")
 
 	return X_batch, y_batch
 
+
+# batch generator to use with model.fit_generator()
 class MyGenerator(Sequence):
 
 	def __init__(self, X, y, batch_size, horizontal_flip=False, vertical_flip=False, swap_axis=False, min_true_label=None):
@@ -156,6 +158,7 @@ class MyGenerator(Sequence):
 	def __getitem__(self, idx):
 		X_batch, y_batch = form_batch(self.X, self.y, self.batch_size, self.min_true_label)
 
+		# apply random transformations to each patch within the batch
 		for i in range(X_batch.shape[0]):
 			xb = X_batch[i]
 			yb = y_batch[i]
@@ -186,38 +189,3 @@ class MyGenerator(Sequence):
 		#print(X_batch.shape, y_batch.shape)
 
 		return X_batch, y_batch[:, 16:16 + img_cols - 32, 16:16 + img_rows - 32, :]
-
-
-def formPredBatch(X, batch_size, count):
-	X_batch = np.zeros((batch_size, num_channels, img_rows, img_cols))
-
-	for i in range(batch_size):
-		startWidth = 64 * i + 16
-		startHeight = 64 * count + 16
-
-		if i == 0:
-			startWidth = 0
-		if count == 0:
-			startHeight = 0
-
-		X_batch[i] = X[:, startWidth: startWidth + img_cols, startHeight: startHeight + img_rows]
-
-	return X_batch
-
-class PredGenerator(Sequence):
-
-	def __init__(self, X, batch_size, tol=1):
-		self.X = X
-		self.batch_size = batch_size
-		self.tol = tol
-		self.count = 0
-
-	def __len__(self):
-		return self.tol
-
-	def __getitem__(self, idx):
-		X_batch = formPredBatch(self.X, self.batch_size, self.count)
-		X_batch = X_batch.swapaxes(1,3)
-		self.count += 1
-
-		return X_batch

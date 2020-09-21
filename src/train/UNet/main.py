@@ -6,17 +6,14 @@ from tensorflow.keras.backend import binary_crossentropy
 import tensorflow.keras.backend as K
 import datetime
 import h5py
-import os
 import numpy as np
 import pandas as pd
-#tf.enable_eager_execution()abd
 from tensorflow.python.keras.utils.data_utils import Sequence
-
 
 from unetModelFunc import *
 
 def main():
-	data_path = '../../data'
+	data_path = '../../../data'
 	now = datetime.datetime.now()
 
 	print('[{}] Creating and compiling model...'.format(str(datetime.datetime.now())))
@@ -46,7 +43,7 @@ def main():
 	nb_epoch = 3
 	suffix = 'roads_3_'+str(datetime.datetime.now())[:16]
 
-	callbackPath = "../cache/Checkpoints/{}_{}_{}".format(batch_size, nb_epoch, suffix)
+	callbackPath = "../../cache/UNet/Checkpoints/{}_{}_{}".format(batch_size, nb_epoch, suffix)
 	os.makedirs(callbackPath, exist_ok=True)
 
 	history = keras.callbacks.History()
@@ -58,8 +55,8 @@ def main():
 		 mode='max',
 		 save_weights_only=True)
 	]
-	#model.compile(optimizer=Nadam(lr=1e-3), loss=jaccard_coef_loss, metrics=['binary_crossentropy', jaccard_coef_int])
 
+	# shuffle images
 	import random
 	random.seed(a=1)
 	mylist = random.sample(range(len(images_list)), len(images_list))
@@ -67,12 +64,13 @@ def main():
 	X_train = X_train[mylist,:,:,:]
 	y_train = y_train[mylist,:,:,:]
 
+	# instantiate generators for train and validation
 	trainGen = MyGenerator(X_train[:len(images_list)-num_test_images], y_train[:len(images_list)-num_test_images], batch_size, horizontal_flip=True, vertical_flip=True, swap_axis=True)
 	testGen  = MyGenerator(X_train[len(images_list)-num_test_images:], y_train[len(images_list)-num_test_images:], batch_size, horizontal_flip=True, vertical_flip=True, swap_axis=True)
 
 	model.fit_generator(trainGen, epochs=nb_epoch, steps_per_epoch=batch_size, validation_data=testGen, callbacks=callbacks, workers=16)
 
-	#model.fit(X_train, y_train, batch_size=batch_size, epochs=nb_epoch)
+	# save important outputs
 	save_model(model, "{batch}_{epoch}_{suffix}".format(batch=batch_size, epoch=nb_epoch, suffix=suffix))
 	save_history(history, suffix)
 

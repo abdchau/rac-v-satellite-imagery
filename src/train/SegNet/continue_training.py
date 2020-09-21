@@ -16,7 +16,7 @@ from tensorflow.python.keras.utils.data_utils import Sequence
 from unetModelFunc import *
 
 def main():
-	data_path = '../../data'
+	data_path = '../../../data'
 	CROSS = '128_3_roads_3_2020-07-14 22:14'
 
 	now = datetime.datetime.now()
@@ -34,8 +34,8 @@ def main():
 
 	X_train = np.array(f['train'])
 
-	images_list = [8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] # road images
-	# images_list = list(range(25))
+	# images_list = [8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] # road images
+	images_list = list(range(25))
 	num_test_images = 3
     
 	y_train = np.array(f['train_mask'])[:, 2]
@@ -52,7 +52,7 @@ def main():
 	nb_epoch = 2
 	suffix = 'roads_3_'+str(datetime.datetime.now())[:16]
 
-	callbackPath = "../cache/Checkpoints/{}_{}_{}".format(batch_size, nb_epoch, suffix)
+	callbackPath = "../../cache/SegNet/Checkpoints/{}_{}_{}".format(batch_size, nb_epoch, suffix)
 	os.makedirs(callbackPath, exist_ok=True)
 
 	history = keras.callbacks.History()
