@@ -14,7 +14,7 @@ Create the `./data/` folder in the root folder of the repository. Download the d
 
 Run `get_3_band_shapes.py` in the `./src/pre_processing` folder. This will obtain the shapes for the images to be used for training.
 
-Next run `cache_train.py`. This will extract the requisite training images and labels, and will save them in `train_16.h5` file in `./data/` folder.
+Next run `cache_train.py`. This will extract the requisite training images and labels, and will save them in `train_16.h5` file in `./data/` folder. Credit for preprocessing code goes to github user ternaus.
 
 ### Training
 
@@ -22,7 +22,7 @@ Run `main.py` in the `./src/train/UNet` folder or `./src/train/SegNet` folder fo
 
 ### Postprocessing
 
-The post_processing folder contains the code to make predictions and detect the best road segment to land on. Simply run the `make_predictions.ipynb` notebook, it contains everything necessary for postprocessing. Model weights to use must be specified in the notebook.
+The post_processing folder contains the code to make predictions and detect the best road segment to land on. Simply run the `make_predictions_*.ipynb` notebook, it contains everything necessary for postprocessing. Model weights to use must be specified in the notebook.
 
 ## Requirements
 
