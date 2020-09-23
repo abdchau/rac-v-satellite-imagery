@@ -3,13 +3,8 @@ Created on Aug 29, 2018
 
 @author: daniel
 '''
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Activation, Conv2D, BatchNormalization, Cropping2D
-from CustomLayers.MaxPoolingWithArgmax2D import MaxPoolingWithArgmax2D
-from CustomLayers.MaxUnpooling2D import MaxUnpooling2D
 import tensorflow.keras.backend as K
 from tensorflow.python.keras.utils.data_utils import Sequence
-from tensorflow.keras.optimizers import Nadam
 import numpy as np
 import random
 import os
@@ -17,95 +12,111 @@ import pandas as pd
 
 smooth = 1e-12
 num_channels = 16
-num_mask_channels = 2
-img_rows = 96
-img_cols = 96
+num_mask_channels = 3
+img_rows = 128
+img_cols = 128
 cache_path = '../../cache'
 
-def jaccard_coef(y_true, y_pred):
-    intersection = K.sum(y_true * y_pred, axis=[0, -1, -2])
-    sum_ = K.sum(y_true + y_pred, axis=[0, -1, -2])
 
-    jac = (intersection + smooth) / (sum_ - intersection + smooth)
+from tensorflow.keras.optimizers import Nadam
+from tensorflow.keras.layers import Conv2D, Input, BatchNormalization, MaxPool2D, Activation, UpSampling2D, Softmax, Cropping2D
+from tensorflow.keras.models import Sequential
 
-    return K.mean(jac)
+def segnet_basic(input_shape=(128,128,16), n_labels=3, orig_depth=32):
+    model = Sequential()
+    model.add(Input(shape=input_shape))
+
+    # contraction 1
+    model.add(Conv2D(orig_depth, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(MaxPool2D(pool_size=2))
+
+    # contraction 2
+    model.add(Conv2D(orig_depth*2, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*2, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(MaxPool2D(pool_size=2))
+
+    # contraction 3
+    model.add(Conv2D(orig_depth*4, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*4, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*4, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(MaxPool2D(pool_size=2))
+
+    # contraction 4
+    model.add(Conv2D(orig_depth*8, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*8, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*8, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(MaxPool2D(pool_size=2))
 
 
-def jaccard_coef_int(y_true, y_pred):
-    y_pred_pos = K.round(K.clip(y_pred, 0, 1))
+    # expansion 1
+    model.add(UpSampling2D(size=2))
+    model.add(Conv2D(orig_depth*8, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*8, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*8, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
 
-    intersection = K.sum(y_true * y_pred_pos, axis=[0, -1, -2])
-    sum_ = K.sum(y_true + y_pred_pos, axis=[0, -1, -2])
+    # expansion 2
+    model.add(UpSampling2D(size=2))
+    model.add(Conv2D(orig_depth*4, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*4, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*4, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
 
-    jac = (intersection + smooth) / (sum_ - intersection + smooth)
-
-    return K.mean(jac)
-
-
-def jaccard_coef_loss(y_true, y_pred):
-    return -K.log(jaccard_coef(y_true, y_pred)) + K.binary_crossentropy(y_pred, y_true)
-
-def createSegNet(input_shape, 
-               n_labels, 
-               numFilters = 32,
-               output_mode="softmax"):
-        
-    inputs = Input(shape=input_shape)
-
-    conv_1 = Conv2D(numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(inputs)
-    conv_1 = BatchNormalization()(conv_1)
-    conv_1 = Activation("relu")(conv_1)
-
-    pool_1, mask_1 = MaxPoolingWithArgmax2D(pool_size=(2, 2))(conv_1)
+    # expansion 3
+    model.add(UpSampling2D(size=2))
+    model.add(Conv2D(orig_depth*2, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth*2, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
     
-    conv_2 = Conv2D(2*numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(pool_1)
-    conv_2 = BatchNormalization()(conv_2)
-    conv_2 = Activation("relu")(conv_2)
+    # expansion 4
+    model.add(UpSampling2D(size=2))
+    model.add(Conv2D(orig_depth, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Conv2D(orig_depth, kernel_size=3, strides=1, kernel_initializer='he_normal', padding='same'))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
 
-    pool_2, mask_2 = MaxPoolingWithArgmax2D(pool_size=(2, 2))(conv_2)
-    
-    conv_3 = Conv2D(2*numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(pool_2)
-    conv_3 = BatchNormalization()(conv_3)
-    conv_3 = Activation("relu")(conv_3)
+    model.add(Conv2D(n_labels, kernel_size=1, padding='same'))# , activation='sigmoid'))
+    model.add(Cropping2D(cropping=((16, 16), (16, 16))))
+    model.add(Softmax())
 
-    pool_3, mask_3 = MaxPoolingWithArgmax2D(pool_size=(2, 2))(conv_3)
-    
-    conv_4 = Conv2D(4*numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(pool_3)
-    conv_4 = BatchNormalization()(conv_4)
-    conv_4 = Activation("relu")(conv_4)
-
-    pool_4, mask_4 = MaxPoolingWithArgmax2D(pool_size=(2, 2))(conv_4)
-             
-    unpool_1 = MaxUnpooling2D(pool_size=(2, 2))([pool_4, mask_4])
-
-    conv_5 = Conv2D(2*numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(unpool_1)
-    conv_5 = BatchNormalization()(conv_5)
-    conv_5 = Activation("relu")(conv_5)
-    
-    unpool_2 =  MaxUnpooling2D(pool_size=(2, 2))([conv_5, mask_3])
-    
-    conv_6 = Conv2D(2*numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(unpool_2)
-    conv_6 = BatchNormalization()(conv_6)
-    conv_6 = Activation("relu")(conv_6)
-    
-    unpool_3 =  MaxUnpooling2D(pool_size=(2, 2))([conv_6, mask_2])
-    
-    conv_7 = Conv2D(numFilters, (3,3), padding="same", kernel_initializer = 'he_normal')(unpool_3)
-    conv_7 = BatchNormalization()(conv_7)
-    conv_7 = Activation("relu")(conv_7)
-    
-    unpool_4 =  MaxUnpooling2D(pool_size=(2, 2))([conv_7, mask_1])
-
-    conv_8 = Conv2D(n_labels, (1, 1), padding="same",kernel_initializer = 'he_normal' )(unpool_4)
-    conv_8 = BatchNormalization()(conv_8)
-    outputs = Activation(output_mode)(conv_8)
-    outputs = Cropping2D(cropping=((16, 16), (16, 16)))(outputs)
-
-
-    segnet = Model(inputs=inputs, outputs=outputs)
-    segnet.compile(optimizer=Nadam(lr=1e-3), loss=jaccard_coef_loss, metrics=['accuracy', jaccard_coef_int])
-
-    return segnet
+    model.compile(optimizer=Nadam(lr=1e-3), loss='categorical_crossentropy', metrics=['acc'])
+    return model
 
 def flip_axis(x, axis):
     x = np.asarray(x).swapaxes(axis, 0)
@@ -159,9 +170,11 @@ def form_batch(X, y, batch_size, min_true_label):
 
             # forces a minimum amount of true values in the random patches
             if min_true_label is not None:
-                sum_ = np.sum(y_batch)
+                sum_ = np.sum(y_batch[:,2,:,:])
+                # print(sum_,min_true_label*i, 'road')
                 if sum_ >= min_true_label*i:
                     break
+
             else:
                 break
 

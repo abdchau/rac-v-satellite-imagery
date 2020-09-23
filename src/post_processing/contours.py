@@ -1,20 +1,16 @@
 from helpers import *
+# from tensorflow import one_hot, argmax
 
 
-def contours():
+def get_segments(img, cornerify=True, minLength=900):
 	# Reading image 
 	# img2 = cv2.imread('road.jpg', cv2.IMREAD_COLOR) 
 	# img = skimage.io.imread("road.png", as_gray=True)
-	with open("prediction.npy", "rb") as f:
-		img = np.load(f)
-
 	cnts = skimage.measure.find_contours(np.asarray(img), 0.5, fully_connected='low', positive_orientation='low')
+	possible_road_segments = separateLists(cnts, getCorners(cnts) if cornerify else False, minLength=minLength)
+	return possible_road_segments
 
-	possible_road_segments = separateLists(cnts, getCorners(cnts, show=False), minLength=80)
-	image1 = drawEdges(img, possible_road_segments)
-	np.save('all_segments.npy', image1)
-	# image1.show()
-
+def get_longest_segment(possible_road_segments):
 	max_index = 0
 	max_length = 0
 
@@ -25,9 +21,6 @@ def contours():
 			max_length = length
 
 	longest_segment = possible_road_segments[max_index]
-	image2 = drawEdges(img, [longest_segment])
-	np.save('best_segment.npy', image2)
-	# image2.show()
 
 	angles = []
 	for segment in possible_road_segments:
@@ -39,7 +32,40 @@ def contours():
 
 	# plt.legend(angles)
 	# plt.show()
-	print("Best segment length:", sqrt(max_length), "Angle:", angles[max_index], "degrees")
+	return longest_segment, angles[max_index], sqrt(max_length)
 
-if __name__ == "__main__":
-	contours()
+def get_safest_segment(img):
+	possible_road_segments = get_segments(img[:,:,1])
+	np.save('all_segments.npy', possible_road_segments)
+	possible_road_segments=list(possible_road_segments)
+	building_segments = list(get_segments(img[:,:,2], cornerify=False, minLength=225))
+
+	delete = []
+	print("Total road segments found:", len(possible_road_segments))
+	SKIP = 20
+	for j in range(len(possible_road_segments)):
+		for build_segment in building_segments:
+			if j in delete:
+				continue
+			for i in range(0, len(build_segment), SKIP):
+				if is_dangerous(possible_road_segments[j][0],possible_road_segments[j][-1],build_segment[i],safe_distance=20):
+					delete.append(j)
+					break
+
+	for i in delete[::-1]:
+		del possible_road_segments[i]
+
+	print("Road segments at a safe distance from buildings:", len(possible_road_segments))
+	longest_segment, angle, length = get_longest_segment(possible_road_segments)
+	print("Best segment length: ", length, "Angle: ", angle, "degrees")
+	return longest_segment
+
+
+if __name__=='__main__':
+	with open("prediction.npy", "rb") as f:
+		img = np.load(f)
+
+	# img = one_hot(argmax(np.round(one_hot(img, depth=3).numpy()), axis=-1).numpy(), depth=3).numpy()
+	longest_segment = get_safest_segment(img)
+	image1 = drawEdges(img, [longest_segment])
+	np.save('best_segment.npy',np.array(image1))

@@ -12,13 +12,13 @@ Create the `./data/` folder in the root folder of the repository. Download the d
 
 ### Preprocess data
 
-Run `get_3_band_shapes.py` in the pre_processing folder. This will obtain the shapes for the images to be used for training.
+Run `get_3_band_shapes.py` in the `./src/pre_processing` folder. This will obtain the shapes for the images to be used for training.
 
 Next run `cache_train.py`. This will extract the requisite training images and labels, and will save them in `train_16.h5` file in `./data/` folder.
 
-### Train the model
+### Training
 
-Run `main.py` in the train folder. This file may be modified to specify training durations and class to train on. To resume training on a network, `continue_training.py` is provided.
+Run `main.py` in the `./src/train/UNet` folder or `./src/train/SegNet` folder for training UNet or SegNet respectively. This file may be modified to specify training durations and classes to train on. To resume training on UNet, `continue_training.py` is provided.
 
 ### Postprocessing
 
