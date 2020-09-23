@@ -1,5 +1,5 @@
 shapely==1.7.0
-tensorflow-gpu==1.15.0
+tensorflow-gpu==1.15.2
 h5py==2.10.0
 tifffile==0.15.1
 numpy
