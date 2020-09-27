@@ -35,10 +35,10 @@ def get_longest_segment(possible_road_segments):
 	return longest_segment, angles[max_index], sqrt(max_length)
 
 def get_safest_segment(img):
-	possible_road_segments = get_segments(img[:,:,1])
-	np.save('all_segments.npy', possible_road_segments)
+	possible_road_segments = get_segments(img[:,:,2])
+	np.save('all_segments.npy', np.array(drawEdges(img, possible_road_segments)))
 	possible_road_segments=list(possible_road_segments)
-	building_segments = list(get_segments(img[:,:,2], cornerify=False, minLength=225))
+	building_segments = list(get_segments(img[:,:,1], cornerify=False, minLength=225))
 
 	delete = []
 	print("Total road segments found:", len(possible_road_segments))
